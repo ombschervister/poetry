@@ -1,10 +1,12 @@
 import hashlib
 import json
+import logging
 
 from typing import TYPE_CHECKING
 
 from poetry.core.packages.utils.link import Link
 from poetry.utils._compat import Path
+from poetry.utils.helpers import get_file_hash
 
 from .chooser import InvalidWheelName
 from .chooser import Wheel
@@ -75,13 +77,25 @@ class Chef:
         return min(candidates)[1]
 
     def get_cached_archives_for_link(self, link):  # type: (Link) -> List[Link]
+
         cache_dir = self.get_cache_directory_for_link(link)
 
         archive_types = ["whl", "tar.gz", "tar.bz2", "bz2", "zip"]
         links = []
         for archive_type in archive_types:
             for archive in cache_dir.glob("*.{}".format(archive_type)):
-                links.append(Link(archive.as_uri()))
+
+                accept = True
+
+                if link.hash:
+                    real_hash = get_file_hash(archive, link.hash_name)
+                    if real_hash != link.hash:
+                        logger = logging.getLogger(__name__)
+                        logger.warning("cache of {} is corrupted".format(link.filename))
+                        accept = False
+
+                if accept:
+                    links.append(Link(archive.as_uri()))
 
         return links
 
